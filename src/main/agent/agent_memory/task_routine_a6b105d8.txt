@@ -1,0 +1,10 @@
+Task: Open Google Chrome, search for YouTube, and open a MrBeast video
+Successful Routine:
+press_key({'key': 'super'}) -> Pressed key: super
+type_text({'text': 'Chrome'}) -> Typed: Chrome
+press_key({'key': 'enter'}) -> Pressed key: enter
+wait({'ms': 1500}) -> Waited 1500ms
+click_coordinate({'x': 960, 'y': 700}) -> Clicked coordinate (1268, 722) (window-relative: 960, 700)
+wait({'ms': 2000}) -> Waited 2000ms
+press_key({'key': 'f6'}) -> Pressed key: f6
+type_text({'text': 'youtube.com'}) -> Typed: youtube.com

@@ -1,0 +1,434 @@
+[
+  {
+    "id": "6ca36516-d288-4073-ab63-3899cc8265a1",
+    "title": "Open Chrome , Open Youtube, se...",
+    "timestamp": 1784036998109,
+    "messages": [
+      {
+        "timestamp": 1784037045316,
+        "role": "system",
+        "content": "<retrieved_long_term_memory>\nThe following guidelines, custom scripts, or past summaries were found in your long-term memory and are relevant to the user's current request. Use them to guide your plan and writing phase:\n\n<memory_file name=\"task_routine_dd0d756d.txt\">\nTask: Search for YouTube in Google Chrome and open a MrBeast video\nSuccessful Routine:\nclick_element({'element_id': 2}) -> Clicked element 2 (Who's using Chrome?)\npress_key({'key': 'alt+tab'}) -> Pressed key: alt+tab\nclick_coordinate({'x': 961, 'y': 529}) -> Clicked coordinate (1269, 551) (window-relative: 961, 529)\npress_key({'key': 'enter'}) -> Pressed key: enter\nclick_coordinate({'x': 961, 'y': 600}) -> Clicked coordinate (1269, 622) (window-relative: 961, 600)\npress_key({'key': 'tab'}) -> Pressed key: tab\npress_key({'key': 'escape'}) -> Pressed key: escape\nclick_coordinate({'x': 960, 'y': 580}) -> Clicked coordinate (1268, 602) (window-relative: 960, 580)\n</memory_file>\n\n<memory_file name=\"task_routine_a6b105d8.txt\">\nTask: Open Google Chrome, search for YouTube, and open a MrBeast video\nSuccessful Routine:\npress_key({'key': 'super'}) -> Pressed key: super\ntype_text({'text': 'Chrome'}) -> Typed: Chrome\npress_key({'key': 'enter'}) -> Pressed key: enter\nwait({'ms': 1500}) -> Waited 1500ms\nclick_coordinate({'x': 960, 'y': 700}) -> Clicked coordinate (1268, 722) (window-relative: 960, 700)\nwait({'ms': 2000}) -> Waited 2000ms\npress_key({'key': 'f6'}) -> Pressed key: f6\ntype_text({'text': 'youtube.com'}) -> Typed: youtube.com\n</memory_file>\n\n<memory_file name=\"task_routine_ecc1cf0b.txt\">\nTask: Open Google Chrome with a random user, search for YouTube, and open a MrBeast video\nSuccessful Routine:\npress_key({'key': 'win'}) -> Pressed key: win\npress_key({'key': 'enter'}) -> Pressed key: enter\nwait({'ms': 2000}) -> Waited 2000ms\nclick_coordinate({'x': 960, 'y': 540}) -> Clicked coordinate (1268, 562) (window-relative: 960, 540)\npress_key({'key': 'tab'}) -> Pressed key: tab\n</memory_file>\n</retrieved_long_term_memory>"
+      },
+      {
+        "timestamp": 1784037045316,
+        "role": "user",
+        "content": "Open Chrome , Open Youtube, search for MR beast, open rando and start exactly from 3: 20 sec's of that video"
+      },
+      {
+        "timestamp": 1784037099738,
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "name": "mcp_chrome_new_page",
+            "args": {
+              "url": "https://www.youtube.com",
+              "background": false,
+              "isolatedContext": "None",
+              "timeout": 0
+            },
+            "id": "call_oKYAsr5r49hoXYkxAkABtsHw",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_take_snapshot",
+            "args": {},
+            "id": "call_ZbvjX0Q5OmFF8ezrivyK5PM2",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_fill_form",
+            "args": {
+              "elements": [
+                {
+                  "uid": "search_box",
+                  "value": "MR Beast"
+                }
+              ]
+            },
+            "id": "call_zSaFMVbTbqXwJZZ3nfMJWFep",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_press_key",
+            "args": {
+              "key": "enter"
+            },
+            "id": "call_0nM8RdAfrFzwcNHiEQjItVca",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_take_snapshot",
+            "args": {},
+            "id": "call_EoY8EiqoSsgVb4N0NCLCF6v5",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_click",
+            "args": {
+              "uid": "video_title"
+            },
+            "id": "call_RUPTunIRTz3mPfGq7GBJRtIl",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_evaluate_script",
+            "args": {
+              "function": "() => { document.querySelector('video').currentTime = 200; }"
+            },
+            "id": "call_jBjTHZc4l6kf6jEIYTY8DmTR",
+            "type": "tool_call"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "7875154e-3057-422f-9072-d3eb7dc26fe0",
+    "title": "hello...",
+    "timestamp": 1784021131462,
+    "messages": [
+      {
+        "timestamp": 1784021150441,
+        "role": "user",
+        "content": "hello"
+      },
+      {
+        "timestamp": 1784021150441,
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      {
+        "timestamp": 1784021230259,
+        "role": "system",
+        "content": "<retrieved_long_term_memory>\nThe following guidelines, custom scripts, or past summaries were found in your long-term memory and are relevant to the user's current request. Use them to guide your plan and writing phase:\n\n<memory_file name=\"task_routine_dd0d756d.txt\">\nTask: Search for YouTube in Google Chrome and open a MrBeast video\nSuccessful Routine:\nclick_element({'element_id': 2}) -> Clicked element 2 (Who's using Chrome?)\npress_key({'key': 'alt+tab'}) -> Pressed key: alt+tab\nclick_coordinate({'x': 961, 'y': 529}) -> Clicked coordinate (1269, 551) (window-relative: 961, 529)\npress_key({'key': 'enter'}) -> Pressed key: enter\nclick_coordinate({'x': 961, 'y': 600}) -> Clicked coordinate (1269, 622) (window-relative: 961, 600)\npress_key({'key': 'tab'}) -> Pressed key: tab\npress_key({'key': 'escape'}) -> Pressed key: escape\nclick_coordinate({'x': 960, 'y': 580}) -> Clicked coordinate (1268, 602) (window-relative: 960, 580)\n</memory_file>\n\n<memory_file name=\"task_routine_a6b105d8.txt\">\nTask: Open Google Chrome, search for YouTube, and open a MrBeast video\nSuccessful Routine:\npress_key({'key': 'super'}) -> Pressed key: super\ntype_text({'text': 'Chrome'}) -> Typed: Chrome\npress_key({'key': 'enter'}) -> Pressed key: enter\nwait({'ms': 1500}) -> Waited 1500ms\nclick_coordinate({'x': 960, 'y': 700}) -> Clicked coordinate (1268, 722) (window-relative: 960, 700)\nwait({'ms': 2000}) -> Waited 2000ms\npress_key({'key': 'f6'}) -> Pressed key: f6\ntype_text({'text': 'youtube.com'}) -> Typed: youtube.com\n</memory_file>\n\n<memory_file name=\"task_routine_ecc1cf0b.txt\">\nTask: Open Google Chrome with a random user, search for YouTube, and open a MrBeast video\nSuccessful Routine:\npress_key({'key': 'win'}) -> Pressed key: win\npress_key({'key': 'enter'}) -> Pressed key: enter\nwait({'ms': 2000}) -> Waited 2000ms\nclick_coordinate({'x': 960, 'y': 540}) -> Clicked coordinate (1268, 562) (window-relative: 960, 540)\npress_key({'key': 'tab'}) -> Pressed key: tab\n</memory_file>\n</retrieved_long_term_memory>"
+      },
+      {
+        "timestamp": 1784021230259,
+        "role": "user",
+        "content": "Open Chrome , Open Youtube, search for MR beast, open random video of his , and start exactly from 3: 20 sec's of that video"
+      },
+      {
+        "timestamp": 1784021241983,
+        "role": "assistant",
+        "content": "<function=run_command{\"command\": \"start chrome\"}></function>\n<function=mcp_chrome_new_page{\"url\": \"https://www.youtube.com\", \"background\": false}, \"isolatedContext\": null, \"timeout\": 0}</function>\n<function=mcp_chrome_take_snapshot{\"verbose\": true, \"filePath\": null}</function>\n<function=mcp_chrome_fill{\"uid\": \"search_box\", \"value\": \"MR Beast\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_press_key{\"key\": \"enter\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_take_snapshot{\"verbose\": true, \"filePath\": null}</function>\n<function=mcp_chrome_click{\"uid\": \"video_title\", \"dblClick\": false, \"includeSnapshot\": true}</function>\n<function=mcp_chrome_evaluate_script{\"function\": \"() => { const video = document.querySelector('video'); video.currentTime = 200; }\", \"args\": null, \"filePath\": null, \"dialogAction\": null}</function>"
+      },
+      {
+        "timestamp": 1784036660413,
+        "role": "system",
+        "content": "<retrieved_long_term_memory>\nThe following guidelines, custom scripts, or past summaries were found in your long-term memory and are relevant to the user's current request. Use them to guide your plan and writing phase:\n\n<memory_file name=\"task_routine_dd0d756d.txt\">\nTask: Search for YouTube in Google Chrome and open a MrBeast video\nSuccessful Routine:\nclick_element({'element_id': 2}) -> Clicked element 2 (Who's using Chrome?)\npress_key({'key': 'alt+tab'}) -> Pressed key: alt+tab\nclick_coordinate({'x': 961, 'y': 529}) -> Clicked coordinate (1269, 551) (window-relative: 961, 529)\npress_key({'key': 'enter'}) -> Pressed key: enter\nclick_coordinate({'x': 961, 'y': 600}) -> Clicked coordinate (1269, 622) (window-relative: 961, 600)\npress_key({'key': 'tab'}) -> Pressed key: tab\npress_key({'key': 'escape'}) -> Pressed key: escape\nclick_coordinate({'x': 960, 'y': 580}) -> Clicked coordinate (1268, 602) (window-relative: 960, 580)\n</memory_file>\n\n<memory_file name=\"task_routine_a6b105d8.txt\">\nTask: Open Google Chrome, search for YouTube, and open a MrBeast video\nSuccessful Routine:\npress_key({'key': 'super'}) -> Pressed key: super\ntype_text({'text': 'Chrome'}) -> Typed: Chrome\npress_key({'key': 'enter'}) -> Pressed key: enter\nwait({'ms': 1500}) -> Waited 1500ms\nclick_coordinate({'x': 960, 'y': 700}) -> Clicked coordinate (1268, 722) (window-relative: 960, 700)\nwait({'ms': 2000}) -> Waited 2000ms\npress_key({'key': 'f6'}) -> Pressed key: f6\ntype_text({'text': 'youtube.com'}) -> Typed: youtube.com\n</memory_file>\n\n<memory_file name=\"task_routine_ecc1cf0b.txt\">\nTask: Open Google Chrome with a random user, search for YouTube, and open a MrBeast video\nSuccessful Routine:\npress_key({'key': 'win'}) -> Pressed key: win\npress_key({'key': 'enter'}) -> Pressed key: enter\nwait({'ms': 2000}) -> Waited 2000ms\nclick_coordinate({'x': 960, 'y': 540}) -> Clicked coordinate (1268, 562) (window-relative: 960, 540)\npress_key({'key': 'tab'}) -> Pressed key: tab\n</memory_file>\n</retrieved_long_term_memory>"
+      },
+      {
+        "timestamp": 1784036660413,
+        "role": "user",
+        "content": "Open Chrome , Open Youtube, search for MR beast, open random video of his , and start exactly from 3: 20 sec's of that video"
+      },
+      {
+        "timestamp": 1784036689274,
+        "role": "assistant",
+        "content": "<function=run_command{\"command\": \"start chrome https://www.youtube.com\"}></function>\n<function=mcp_chrome_take_snapshot{\"verbose\": true, \"filePath\": null}</function>\n<function=mcp_chrome_fill{\"uid\": \"search_box\", \"value\": \"MR Beast\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_press_key{\"key\": \"enter\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_take_snapshot{\"verbose\": true, \"filePath\": null}</function>\n<function=mcp_chrome_click{\"uid\": \"video_title\", \"dblClick\": false, \"includeSnapshot\": true}</function>\n<function=mcp_chrome_evaluate_script{\"function\": \"() => { const video = document.querySelector('video'); video.currentTime = 200; }\", \"args\": null, \"filePath\": null, \"dialogAction\": null}</function>",
+        "tool_calls": [
+          {
+            "name": "run_command",
+            "args": {
+              "command": "start chrome https://www.youtube.com"
+            },
+            "id": "call_37b4ca24",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_take_snapshot",
+            "args": {
+              "verbose": true,
+              "filePath": null
+            },
+            "id": "call_c467b734",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_fill",
+            "args": {
+              "uid": "search_box",
+              "value": "MR Beast",
+              "includeSnapshot": true
+            },
+            "id": "call_efa90e88",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_press_key",
+            "args": {
+              "key": "enter",
+              "includeSnapshot": true
+            },
+            "id": "call_bda81865",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_take_snapshot",
+            "args": {
+              "verbose": true,
+              "filePath": null
+            },
+            "id": "call_64b06c2c",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_click",
+            "args": {
+              "uid": "video_title",
+              "dblClick": false,
+              "includeSnapshot": true
+            },
+            "id": "call_863489c8",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_evaluate_script",
+            "args": {},
+            "id": "call_822d1ea6",
+            "type": "tool_call"
+          }
+        ]
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "run_command",
+        "tool_call_id": "call_37b4ca24",
+        "content": "Command executed successfully (no stdout/stderr returned)."
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "mcp_chrome_take_snapshot",
+        "tool_call_id": "call_c467b734",
+        "content": "Error invoking tool 'mcp_chrome_take_snapshot' with kwargs {'verbose': True, 'filePath': None} with error:\n filePath: Input should be a valid string\n Please fix the error and try again."
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "mcp_chrome_fill",
+        "tool_call_id": "call_efa90e88",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "mcp_chrome_press_key",
+        "tool_call_id": "call_bda81865",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "mcp_chrome_take_snapshot",
+        "tool_call_id": "call_64b06c2c",
+        "content": "Error invoking tool 'mcp_chrome_take_snapshot' with kwargs {'verbose': True, 'filePath': None} with error:\n filePath: Input should be a valid string\n Please fix the error and try again."
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "mcp_chrome_click",
+        "tool_call_id": "call_863489c8",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036689647,
+        "role": "tool",
+        "name": "mcp_chrome_evaluate_script",
+        "tool_call_id": "call_822d1ea6",
+        "content": "Error invoking tool 'mcp_chrome_evaluate_script' with kwargs {} with error:\n function: Field required\n Please fix the error and try again."
+      },
+      {
+        "timestamp": 1784036713770,
+        "role": "assistant",
+        "content": "<function=run_command{\"command\": \"start chrome https://www.youtube.com\"}></function>\n<function=mcp_chrome_fill{\"uid\": \"search_box\", \"value\": \"MR Beast\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_press_key{\"key\": \"enter\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_click{\"uid\": \"video_title\", \"dblClick\": false, \"includeSnapshot\": true}</function>\n<function=mcp_chrome_evaluate_script{\"function\": \"() => { const video = document.querySelector('video'); video.currentTime = 200; }\", \"args\": null, \"filePath\": null, \"dialogAction\": null}</function>",
+        "tool_calls": [
+          {
+            "name": "run_command",
+            "args": {
+              "command": "start chrome https://www.youtube.com"
+            },
+            "id": "call_073e20ae",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_fill",
+            "args": {
+              "uid": "search_box",
+              "value": "MR Beast",
+              "includeSnapshot": true
+            },
+            "id": "call_f0871584",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_press_key",
+            "args": {
+              "key": "enter",
+              "includeSnapshot": true
+            },
+            "id": "call_a506225a",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_click",
+            "args": {
+              "uid": "video_title",
+              "dblClick": false,
+              "includeSnapshot": true
+            },
+            "id": "call_a7db6e3a",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_evaluate_script",
+            "args": {},
+            "id": "call_7acad710",
+            "type": "tool_call"
+          }
+        ]
+      },
+      {
+        "timestamp": 1784036714068,
+        "role": "tool",
+        "name": "run_command",
+        "tool_call_id": "call_073e20ae",
+        "content": "Command executed successfully (no stdout/stderr returned)."
+      },
+      {
+        "timestamp": 1784036714068,
+        "role": "tool",
+        "name": "mcp_chrome_fill",
+        "tool_call_id": "call_f0871584",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036714068,
+        "role": "tool",
+        "name": "mcp_chrome_press_key",
+        "tool_call_id": "call_a506225a",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036714068,
+        "role": "tool",
+        "name": "mcp_chrome_click",
+        "tool_call_id": "call_a7db6e3a",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036714068,
+        "role": "tool",
+        "name": "mcp_chrome_evaluate_script",
+        "tool_call_id": "call_7acad710",
+        "content": "Error invoking tool 'mcp_chrome_evaluate_script' with kwargs {} with error:\n function: Field required\n Please fix the error and try again."
+      },
+      {
+        "timestamp": 1784036730030,
+        "role": "assistant",
+        "content": "<function=task{\"description\": \"Open Chrome, navigate to YouTube, search for MR Beast, open a random video, and start playing from 3:20\", \"subagent_type\": \"general-purpose\"}></function>",
+        "tool_calls": [
+          {
+            "name": "task",
+            "args": {
+              "description": "Open Chrome, navigate to YouTube, search for MR Beast, open a random video, and start playing from 3:20",
+              "subagent_type": "general-purpose"
+            },
+            "id": "call_c2df6304",
+            "type": "tool_call"
+          }
+        ]
+      },
+      {
+        "timestamp": 1784036737710,
+        "role": "tool",
+        "name": "task",
+        "tool_call_id": "call_c2df6304",
+        "content": "<function=mcp_chrome_new_page{\"url\": \"https://www.youtube.com\", \"background\": false}</function>"
+      },
+      {
+        "timestamp": 1784036777599,
+        "role": "assistant",
+        "content": "<function=mcp_chrome_fill{\"uid\": \"search_box\", \"value\": \"MR Beast\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_press_key{\"key\": \"enter\", \"includeSnapshot\": true}</function>\n<function=mcp_chrome_click{\"uid\": \"video_title\", \"dblClick\": false, \"includeSnapshot\": true}</function>\n<function=mcp_chrome_evaluate_script{\"function\": \"() => { const video = document.querySelector('video'); video.currentTime = 200; }\", \"args\": null, \"filePath\": null, \"dialogAction\": null}</function>",
+        "tool_calls": [
+          {
+            "name": "mcp_chrome_fill",
+            "args": {
+              "uid": "search_box",
+              "value": "MR Beast",
+              "includeSnapshot": true
+            },
+            "id": "call_bbca46b3",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_press_key",
+            "args": {
+              "key": "enter",
+              "includeSnapshot": true
+            },
+            "id": "call_a0a96fd0",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_click",
+            "args": {
+              "uid": "video_title",
+              "dblClick": false,
+              "includeSnapshot": true
+            },
+            "id": "call_62b99e28",
+            "type": "tool_call"
+          },
+          {
+            "name": "mcp_chrome_evaluate_script",
+            "args": {},
+            "id": "call_9ad0cc00",
+            "type": "tool_call"
+          }
+        ]
+      },
+      {
+        "timestamp": 1784036777813,
+        "role": "tool",
+        "name": "mcp_chrome_fill",
+        "tool_call_id": "call_bbca46b3",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036777813,
+        "role": "tool",
+        "name": "mcp_chrome_press_key",
+        "tool_call_id": "call_a0a96fd0",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036777813,
+        "role": "tool",
+        "name": "mcp_chrome_click",
+        "tool_call_id": "call_62b99e28",
+        "content": "Could not connect to Chrome. Check if Chrome is running.\nCause: Failed to fetch browser webSocket URL from http://localhost:9222/json/version: fetch failed"
+      },
+      {
+        "timestamp": 1784036777813,
+        "role": "tool",
+        "name": "mcp_chrome_evaluate_script",
+        "tool_call_id": "call_9ad0cc00",
+        "content": "Error invoking tool 'mcp_chrome_evaluate_script' with kwargs {} with error:\n function: Field required\n Please fix the error and try again."
+      },
+      {
+        "timestamp": 1784036840607,
+        "role": "assistant",
+        "content": "<function=run_command{\"command\": \"start chrome https://www.youtube.com/results?search_query=mrbeast\"}></function>\n<function=mcp_chrome_take_snapshot{\"verbose\": true, \"filePath\": null}</function>\n<function=mcp_chrome_click{\"uid\": \"video_title\", \"dblClick\": false, \"includeSnapshot\": true}</function>\n<function=mcp_chrome_evaluate_script{\"function\": \"() => { const video = document.querySelector('video'); video.currentTime = 200; }\", \"args\": null, \"filePath\": null, \"dialogAction\": null}</function>"
+      }
+    ]
+  },
+  {
+    "id": "15c4c06b-b4c4-4e17-a658-a8c7444aa78a",
+    "title": "New Session",
+    "timestamp": 1784021121061,
+    "messages": []
+  }
+]

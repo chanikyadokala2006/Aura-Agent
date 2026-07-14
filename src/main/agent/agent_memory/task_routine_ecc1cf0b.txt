@@ -1,0 +1,7 @@
+Task: Open Google Chrome with a random user, search for YouTube, and open a MrBeast video
+Successful Routine:
+press_key({'key': 'win'}) -> Pressed key: win
+press_key({'key': 'enter'}) -> Pressed key: enter
+wait({'ms': 2000}) -> Waited 2000ms
+click_coordinate({'x': 960, 'y': 540}) -> Clicked coordinate (1268, 562) (window-relative: 960, 540)
+press_key({'key': 'tab'}) -> Pressed key: tab

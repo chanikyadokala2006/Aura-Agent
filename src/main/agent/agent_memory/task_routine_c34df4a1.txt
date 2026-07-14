@@ -1,0 +1,7 @@
+Task: Open a new user account in Google Chrome and search for YouTube
+Successful Routine:
+click_element({'element_id': 2}) -> Clicked element 2 (Who's using Chrome?)
+press_key({'key': 'win'}) -> Pressed key: win
+type_text({'text': 'Chrome'}) -> Typed: Chrome
+press_key({'key': 'enter'}) -> Pressed key: enter
+press_key({'key': 'tab'}) -> Pressed key: tab

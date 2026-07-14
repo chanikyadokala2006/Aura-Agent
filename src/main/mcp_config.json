@@ -1,0 +1,27 @@
+{
+  "servers": {
+    "chrome": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--browser-url", "http://localhost:9222"],
+      "enabled": true
+    },
+    "gui-operate": {
+      "command": "npx",
+      "args": ["-y", "tsx", "mcp/gui-operate-server.ts"],
+      "enabled": true
+    },
+    "dev-tools": {
+      "command": "npx",
+      "args": ["-y", "tsx", "mcp/software-dev-server-example.ts"],
+      "enabled": true
+    },
+    "notion": {
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "NOTION_TOKEN": ""
+      },
+      "enabled": false
+    }
+  }
+}

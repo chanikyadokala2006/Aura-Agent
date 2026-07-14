@@ -1,0 +1,10 @@
+Task: Search for YouTube in Google Chrome and open a MrBeast video
+Successful Routine:
+click_element({'element_id': 2}) -> Clicked element 2 (Who's using Chrome?)
+press_key({'key': 'alt+tab'}) -> Pressed key: alt+tab
+click_coordinate({'x': 961, 'y': 529}) -> Clicked coordinate (1269, 551) (window-relative: 961, 529)
+press_key({'key': 'enter'}) -> Pressed key: enter
+click_coordinate({'x': 961, 'y': 600}) -> Clicked coordinate (1269, 622) (window-relative: 961, 600)
+press_key({'key': 'tab'}) -> Pressed key: tab
+press_key({'key': 'escape'}) -> Pressed key: escape
+click_coordinate({'x': 960, 'y': 580}) -> Clicked coordinate (1268, 602) (window-relative: 960, 580)

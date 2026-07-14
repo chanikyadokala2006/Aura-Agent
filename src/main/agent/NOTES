@@ -1,0 +1,64 @@
+# MyOllama Project Architecture & Details
+
+## 1. Core Architecture
+The project is a local desktop AI assistant named **NEURAL_LINK_v4.2** (or Antigravity UI). It consists of a backend orchestrator (`MyAgent.py` / `desktop_app.py`) and a frontend web UI (`index.html`) rendered via PyWebView.
+The agent acts as a local coordinator Small Language Model (SLM), specifically `meta-llama/llama-3.1-8b-instruct`, handling reasoning and simple tasks locally, while delegating complex GUI automation to a larger LLM (`DeepSeek-R1`).
+
+## 2. File & Directory Structure
+- **`agent/MyAgent.py`**: The core logic file. Defines tools, middleware, memory synchronization, and the DeepAgent configuration. Exposes `setup_agent()`.
+- **`desktop_app.py`**: The entry point. Launches the `pywebview` window. Hosts the `Api` class which streams agent responses, intercepts tool calls to send to the UI, and handles user approval of generated plans.
+- **`index.html`**: The UI template. Uses Tailwind CSS and JavaScript to dynamically render user messages, agent plans (in an Artifact panel), reasoning logs, and executed tool outputs.
+- **`agent/agent_memory/`**: A folder storing text files, scripts, and rules.
+- **`agent/.chroma_db/`**: A local Chroma vector database holding embeddings for long-term memory retrieval.
+- **`test_api.py`**: A mock script simulating the `pywebview` Javascript bridge for headless testing.
+
+## 3. Minute Details & Mechanics
+
+### Agent Middleware
+`PatchToolMessagesMiddleware`: Intercepts tool execution outputs. Specifically, if a tool (like `take_screenshot`) returns an image URL array, it ensures the `ToolMessage` payload is converted correctly and automatically synthesizes a follow-up `HumanMessage` so the model explicitly "sees" the visual outcome of the tool without crashing LangChain.
+
+### Tool Suite
+1. **`search_file` / `open_file` / `close_file`**: Uses `cmd.exe` to recursively search `SANDBOX_ROOT`. `opened_files` dictionary carefully maps absolute file paths to OS process IDs (PIDs) or `"external"` if opened via `os.startfile`. `close_file` uses `psutil` to gracefully terminate (or forcefully kill after 3s timeout) specific PIDs without indiscriminately closing windows by title.
+2. **`take_screenshot`**: Captures screen, scales it to 384x384 (quality 40) for context optimization, and saves to `screenshot.png`.
+3. **`focus_window`**: Uses `win32gui` and `pyautogui.press('alt')` to bypass Windows foreground locks to force an app to the front before sending keystrokes.
+4. **`observe_screen`**: A visual fusion tool replacing `get_ui_tree` and `take_screenshot`. It uses Windows UI Automation to find bounding boxes, and uses `Pillow` to draw these boxes with numeric IDs over a screenshot (Set-of-Marks approach). Detects game/canvas processes (e.g., Unity) and automatically skips UIA for speed.
+5. **`ask_llm_and_execute`**: The heavy lifter. Delegates tasks to `DeepSeek-R1` via a strict tool-calling loop (ReAct). It provides discrete tools (`click_element(id)`, `type_text`, etc.). **API Resilience**: If the primary `deepseek-r1` model experiences a 500 error or is offline, it dynamically cycles through a list of fallbacks (`deepseek-r1-distill-llama-70b`, `deepseek-v3.1`, `deepseek-latest`, `deepseek-chat`) and caches the first working endpoint globally to prevent future latency. **Mid-Task Reactivity**: It executes tool batches sequentially, but pauses between each step to check a background `ScreenWatcher` flag. If the screen changes mid-batch, it halts execution, pulls a fresh `observe_screen` context, and auto-generates a new plan.
+6. **`ScreenWatcher` Thread**: A daemon thread continuously polling `pyautogui.screenshot()` at a highly downscaled 64x64 grayscale resolution. It uses a fast `numpy` pixel difference to detect visual changes and sets a flag, bypassing the need for expensive high-frequency LLM vision calls.
+
+### Long-Term Memory System
+- Scans `agent_memory/` for `*.txt`, `*.md`, `*.py`, `*.json`.
+- Calculates modifications based on file `mtime`.
+- Uses `text-embedding-3-small` via aicredits API to embed chunks into ChromaDB.
+- `retrieve_relevant_memories` triggers automatically on every user message via `SystemMessage` injection.
+
+### Streaming and Feedback
+- `desktop_app.py` uses `stream_mode="values"` to observe the full LangGraph state at every tick.
+- It parses the last `AIMessage` for `tool_calls` and extracts parameters to show `Executing: tool_name(args)` in the frontend.
+- `<plan>` tags are specifically targeted: If present, the UI strips them out, populates the Artifact Panel, and triggers the `Approve` / `Reject` blocking flow before the system executes further.
+
+## 4. UI/Frontend Features (`index.html`)
+- **Layout & Theming**: Built with Tailwind CSS, leveraging a dark IDE-like theme (neutral grays, `Inter` / `JetBrains Mono` fonts). Split-panel layout (Left: Chat, Right: Artifacts).
+- **Auto-resizing Input**: The chat text area automatically adjusts its height based on the `scrollHeight` via an `oninput` JS trigger.
+- **Dynamic Reasoning UI**: Renders `[UI UPDATE] window.appendReasoning` events into a collapsible terminal-style trace block.
+- **Reject Feedback Loop**: Clicking "Request Changes" triggers a custom modal. The user's typed feedback is passed to `desktop_app.py`, which injects it into the agent's memory stream as a `HumanMessage`, immediately restarting the stream loop to adapt the plan.
+- **Security / Formatting**: Custom `escapeHTML` function implemented to sanitize raw text output before setting innerHTML.
+
+## 5. Agent Prompt Engineering & Workarounds
+- **Start Menu Corruption**: The system prompt specifically instructs the agent *not* to use the Windows Start Menu because it is corrupted on the host machine. It mandates using `Win + R` (Run Dialog) to open applications.
+- **Fresh Observation Rule**: The agent must run `observe_screen` at the start of every new request to get the Set-of-Marks image; no relying on memory.
+- **Model Routing**: The SLM (coordinator) handles simple logic/file tasks using `PythonREPLTool`, but strictly passes all GUI automation to the `DeepSeek-R1` model via `ask_llm_and_execute`.
+- **DeepSeek Tool Batching & Auto-Approve**: DeepSeek is instructed to output its intended GUI actions as a batched list of tool calls to save latency. The *first* batch of a task triggers a blocking `Approve` flow in the UI. If the screen changes dynamically mid-batch and forces a re-plan, subsequent batches are automatically executed ("auto-approved") to allow autonomous adaptation without spamming the user.
+
+## 6. Context Window Management
+- **Token Overflow Prevention**: In `desktop_app.py`, the `messages` list is sliced. If the history exceeds 30 messages, it safely truncates the oldest messages (while ensuring the truncation boundary lands on a `HumanMessage` to avoid breaking conversation pairs).
+
+## 7. Open-Cowork-Main Architecture Notes
+- **Tech Stack**: Electron (Node.js/TypeScript) backend, Vite + React frontend.
+- **Sandboxing**: Employs VM-level isolation using WSL2 on Windows and Lima on macOS. Fallbacks to basic path-based restriction.
+- **Extensibility**: Uses Model Context Protocol (MCP) to connect external tools (Browser, Notion) natively.
+- **Core Features**: Built-in "Skills" system for PPTX, DOCX, XLSX generation. Remote control via Feishu/Slack. Multimodal input (drag-and-drop support).
+- **Integration Potential for MyOllama**: 
+  - We can adopt the **MCP specification** in our Python backend to standardize how our agent interacts with external tools.
+  - We can implement true **WSL2 sandboxing** for the agent's file operations, rather than relying solely on `cmd.exe` in `SANDBOX_ROOT`. 
+  - Upgrading the UI from raw HTML/JS to a **Vite+React** framework (while keeping `pywebview`) could improve modularity and maintainability.
+  - Adding a structured **Skills Library** for common document generation tasks.

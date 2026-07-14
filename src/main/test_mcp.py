@@ -1,0 +1,16 @@
+import os
+import sys
+
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from agent.MyAgent import setup_agent
+
+print("Setting up agent...")
+try:
+    agent = setup_agent()
+    print("Agent setup successfully.")
+except Exception as e:
+    import traceback
+    traceback.print_exc()
