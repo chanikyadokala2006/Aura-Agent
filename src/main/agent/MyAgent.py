@@ -21,10 +21,12 @@ from agent.skills_manager import SkillsManager
 from agent.wsl_bridge import WSLPythonREPLTool
 
 load_dotenv()
-
 aicredits_key = os.getenv("AICREDITS_API_KEY")
-if not aicredits_key:
-    raise ValueError("AICREDITS_API_KEY is not set. Please set it in the .env file.")
+anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+openai_key = os.getenv("OPENAI_API_KEY")
+
+if not aicredits_key and not (anthropic_key and openai_key):
+    print("Warning: Neither AICREDITS_API_KEY nor (ANTHROPIC_API_KEY + OPENAI_API_KEY) found. The agent will not be able to call the LLMs.")
 
 from deepagents.backends import LocalShellBackend
 
@@ -253,12 +255,24 @@ def cleanup_mcp_servers():
 
 atexit.register(cleanup_mcp_servers)
 
-AgentModel = ChatOpenAI(
-    base_url="https://aicredits.in/v1",
-    api_key=aicredits_key,
-    model="anthropic/claude-sonnet-latest",
-    temperature=0
-)
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+
+if aicredits_key:
+    AgentModel = ChatOpenAI(
+        base_url="https://aicredits.in/v1",
+        api_key=aicredits_key,
+        model="anthropic/claude-sonnet-latest",
+        temperature=0
+    )
+elif anthropic_key:
+    AgentModel = ChatAnthropic(
+        api_key=anthropic_key,
+        model_name="claude-3-5-sonnet-latest",
+        temperature=0
+    )
+else:
+    AgentModel = None
 
 from typing import Any
 
@@ -359,12 +373,12 @@ class PatchToolMessagesMiddleware(AgentMiddleware):
         remove_messages = []
         modified = False
 
-        # Keep only the last 16 messages to strictly bound context and prevent runaway costs
-        if len(messages) > 16:
-            for m in messages[:-16]:
+        # Keep only the last 6 messages to strictly bound context and prevent runaway costs
+        if len(messages) > 6:
+            for m in messages[:-6]:
                 if hasattr(m, "id") and m.id:
                     remove_messages.append(RemoveMessage(id=m.id))
-            messages = messages[-16:]
+            messages = messages[-6:]
             modified = True
 
         # Find the index of the most recent message with an image and the most recent memory injection
@@ -488,6 +502,31 @@ class PatchToolMessagesMiddleware(AgentMiddleware):
                 
         return None
 
+class BudgetingMiddleware(AgentMiddleware):
+    def __init__(self, daily_limit: float = 1.00):
+        self.daily_limit = daily_limit
+        
+    def before_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+        messages = state.get("messages", [])
+        total_input = 0
+        total_output = 0
+        for m in messages:
+            if hasattr(m, "response_metadata") and m.response_metadata:
+                token_usage = m.response_metadata.get("token_usage", {})
+                if token_usage:
+                    total_input += token_usage.get("prompt_tokens", 0)
+                    total_output += token_usage.get("completion_tokens", 0)
+                else:
+                    usage = m.response_metadata.get("usage", {})
+                    total_input += usage.get("input_tokens", 0)
+                    total_output += usage.get("output_tokens", 0)
+        
+        # Approximate cost for Claude 3.5 Sonnet
+        cost = (total_input / 1000000) * 3 + (total_output / 1000000) * 15
+        if cost > self.daily_limit:
+            raise RuntimeError(f"Budget Limit Reached: This session has cost ${cost:.4f}, exceeding the limit of ${self.daily_limit:.2f}.")
+        return None
+
 # ---------------------------------------------------------------------------
 # Scope: everything the agent can search/read/list is bounded to this root.
 # Defaulted to whole-system (C:\) per user preference. Narrow this back to a
@@ -523,11 +562,17 @@ def sync_agent_memory():
     from langchain_core.documents import Document
 
     try:
-        embeddings = OpenAIEmbeddings(
-            base_url="https://aicredits.in/v1",
-            openai_api_key=aicredits_key,
-            model="text-embedding-3-small"
-        )
+        if aicredits_key:
+            embeddings = OpenAIEmbeddings(
+                openai_api_base="https://aicredits.in/v1",
+                openai_api_key=aicredits_key,
+                model="text-embedding-3-small"
+            )
+        else:
+            embeddings = OpenAIEmbeddings(
+                api_key=openai_key,
+                model="text-embedding-3-small"
+            )
         
         vector_store = Chroma(
             persist_directory=DB_DIR,
@@ -604,14 +649,21 @@ def sync_agent_memory():
 def retrieve_relevant_memories(query: str, limit: int = 3) -> str:
     """Queries ChromaDB to retrieve relevant memory context."""
     from langchain_openai import OpenAIEmbeddings
+    from langchain_openai import ChatOpenAI
     from langchain_community.vectorstores import Chroma
     
     try:
-        embeddings = OpenAIEmbeddings(
-            base_url="https://aicredits.in/v1",
-            openai_api_key=aicredits_key,
-            model="text-embedding-3-small"
-        )
+        if aicredits_key:
+            embeddings = OpenAIEmbeddings(
+                openai_api_base="https://aicredits.in/v1",
+                openai_api_key=aicredits_key,
+                model="text-embedding-3-small"
+            )
+        else:
+            embeddings = OpenAIEmbeddings(
+                api_key=openai_key,
+                model="text-embedding-3-small"
+            )
         vector_store = Chroma(
             persist_directory=DB_DIR,
             embedding_function=embeddings,
@@ -1125,13 +1177,21 @@ class LoopGuard:
 
 def _run_subagent_task(task_description: str) -> str:
     from langchain_core.messages import SystemMessage, HumanMessage
-    from langchain_openai import ChatOpenAI
-    llm = ChatOpenAI(
-        base_url="https://aicredits.in/v1",
-        api_key=aicredits_key,
-        model="anthropic/claude-3.5-sonnet", # Better model for reasoning
-        temperature=0.0
-    )
+    if aicredits_key:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            base_url="https://aicredits.in/v1",
+            api_key=aicredits_key,
+            model="anthropic/claude-3.5-sonnet", # Better model for reasoning
+            temperature=0.0
+        )
+    else:
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(
+            api_key=anthropic_key,
+            model_name="claude-3-5-sonnet-latest", 
+            temperature=0.0
+        )
     messages = [
         SystemMessage(content="You are a focused sub-agent. Complete the task below and return ONLY the result. Do not ask questions."),
         HumanMessage(content=f"Task: {task_description}")
@@ -1257,12 +1317,22 @@ def ask_llm_and_execute(task_description: str) -> str:
             last_err = None
             for model_name in models_to_try:
                 try:
-                    llm = ChatOpenAI(
-                        base_url="https://aicredits.in/v1",
-                        api_key=aicredits_key,
-                        model=model_name,
-                        temperature=0.0
-                    )
+                    if aicredits_key:
+                        llm = ChatOpenAI(
+                            base_url="https://aicredits.in/v1",
+                            api_key=aicredits_key,
+                            model=model_name,
+                            temperature=0.0
+                        )
+                    else:
+                        from langchain_openai import ChatOpenAI
+                        # DeepSeek via OpenAI SDK, default to standard models if using official OpenAI key
+                        safe_model = "gpt-4o" if openai_key else model_name
+                        llm = ChatOpenAI(
+                            api_key=openai_key,
+                            model=safe_model,
+                            temperature=0.0
+                        )
                     llm_with_tools = llm.bind_tools(tools)
                     response = llm_with_tools.invoke(messages)
                     current_gui_model = model_name
@@ -1430,6 +1500,136 @@ def save_to_memory(filename: str, content: str) -> str:
     except Exception as e:
         return f"Failed to save to memory: {e}"
 
+@tool("index_workspace_code")
+def index_workspace_code(directory_path: str) -> str:
+    """Recursively scans a directory for source code files, chunks them, and stores their embeddings in a ChromaDB vector database for semantic search.
+    Only use this when you explicitly need to index or re-index a codebase. This consumes tokens.
+    directory_path: Absolute path to the directory to index.
+    """
+    import os
+    import glob
+    from langchain_community.vectorstores import Chroma
+    from langchain_core.documents import Document
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    
+    if not os.path.exists(directory_path):
+        return f"Error: Directory {directory_path} does not exist."
+        
+    try:
+        from langchain_openai import OpenAIEmbeddings
+        if aicredits_key:
+            embeddings = OpenAIEmbeddings(
+                openai_api_base="https://aicredits.in/v1",
+                openai_api_key=aicredits_key,
+                model="text-embedding-3-small"
+            )
+        else:
+            embeddings = OpenAIEmbeddings(
+                api_key=openai_key,
+                model="text-embedding-3-small"
+            )
+            
+        vector_store = Chroma(
+            persist_directory=DB_DIR,
+            embedding_function=embeddings,
+            collection_name="agent_code_memory"
+        )
+        
+        try:
+            vector_store._client.delete_collection("agent_code_memory")
+            vector_store = Chroma(
+                persist_directory=DB_DIR,
+                embedding_function=embeddings,
+                collection_name="agent_code_memory"
+            )
+        except Exception:
+            pass
+        
+        allowed_extensions = ["*.py", "*.js", "*.ts", "*.jsx", "*.tsx", "*.html", "*.css", "*.md", "*.json", "*.java", "*.c", "*.cpp", "*.h", "*.go", "*.rs"]
+        files = []
+        for ext in allowed_extensions:
+            files.extend(glob.glob(os.path.join(directory_path, "**", ext), recursive=True))
+            
+        ignore_dirs = ["node_modules", ".git", "venv", "__pycache__", ".chroma_db", "dist", "build"]
+        valid_files = []
+        for f in files:
+            parts = f.replace("\\", "/").split("/")
+            if any(ign in parts for ign in ignore_dirs):
+                continue
+            valid_files.append(f)
+            
+        if not valid_files:
+            return "No valid source code files found to index."
+            
+        documents = []
+        for filepath in valid_files:
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                documents.append(Document(page_content=content, metadata={"source": filepath}))
+            except Exception:
+                continue
+                
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        chunks = text_splitter.split_documents(documents)
+        
+        if not chunks:
+            return "Failed to extract text chunks from files."
+            
+        batch_size = 100
+        for i in range(0, len(chunks), batch_size):
+            vector_store.add_documents(chunks[i:i+batch_size])
+            
+        return f"Successfully indexed {len(valid_files)} files into {len(chunks)} searchable chunks."
+    except Exception as e:
+        return f"Error during indexing: {e}"
+
+@tool("semantic_search_code")
+def semantic_search_code(query: str, limit: int = 5) -> str:
+    """Performs a semantic similarity search across the indexed codebase.
+    Returns the most relevant code chunks matching the natural language query.
+    Note: You MUST run index_workspace_code at least once on the project before searching!
+    query: Natural language description of what you are looking for (e.g. 'database connection logic').
+    limit: Number of results to return (default 5).
+    """
+    try:
+        from langchain_openai import OpenAIEmbeddings
+        from langchain_community.vectorstores import Chroma
+        
+        if aicredits_key:
+            embeddings = OpenAIEmbeddings(
+                openai_api_base="https://aicredits.in/v1",
+                openai_api_key=aicredits_key,
+                model="text-embedding-3-small"
+            )
+        else:
+            embeddings = OpenAIEmbeddings(
+                api_key=openai_key,
+                model="text-embedding-3-small"
+            )
+            
+        vector_store = Chroma(
+            persist_directory=DB_DIR,
+            embedding_function=embeddings,
+            collection_name="agent_code_memory"
+        )
+        
+        db_data = vector_store.get()
+        if not db_data or not db_data.get("ids"):
+            return "Error: The code vector database is empty. You must call `index_workspace_code` on the project directory first."
+            
+        results = vector_store.similarity_search(query, k=limit)
+        
+        formatted_memories = []
+        for doc in results:
+            filename = doc.metadata.get("source", "Unknown")
+            content = doc.page_content
+            formatted_memories.append(f"<code_chunk file=\"{filename}\">\n{content}\n</code_chunk>")
+            
+        return "\n\n".join(formatted_memories)
+    except Exception as e:
+        return f"Error querying code database: {e}"
+
 @tool("create_skill")
 def create_skill(name: str, python_code: str) -> str:
     """
@@ -1531,8 +1731,8 @@ def setup_agent(memory=None):
     LocalAgent = create_deep_agent(
         model=AgentModel,
         backend=LocalShellBackend(root_dir=None, virtual_mode=False),
-        tools=[open_file, close_file, search_file, run_command, read_file, write_file, list_files, save_to_memory, web_search, computer_move_mouse, computer_click, computer_type, create_skill, agent_sleep] + active_mcp_langchain_tools + dynamic_tools + pw_tools,
-        middleware=[PatchToolMessagesMiddleware(), LoopGuardMiddleware()],
+        tools=[open_file, close_file, search_file, run_command, read_file, write_file, list_files, save_to_memory, index_workspace_code, semantic_search_code, web_search, computer_move_mouse, computer_click, computer_type, create_skill, agent_sleep] + active_mcp_langchain_tools + dynamic_tools + pw_tools,
+        middleware=[PatchToolMessagesMiddleware(), LoopGuardMiddleware(), BudgetingMiddleware(daily_limit=1.00)],
         checkpointer=memory,
         system_prompt=(
             "You are a highly advanced local coordinator agent controlling the system via tools.\n\n"

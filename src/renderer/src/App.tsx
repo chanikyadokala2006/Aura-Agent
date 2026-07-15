@@ -297,40 +297,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Right Pane: Artifacts & Inspector */}
-      <aside className="pane w-[500px] flex-shrink-0 bg-surface-elevated">
-        {/* Top App Bar / Tabs */}
-        <div className="flex justify-between items-center px-4 w-full h-12 sticky top-0 z-50 bg-surface/80 backdrop-blur-sm border-b border-border-subtle">
-          <div className="flex items-center gap-4 h-full">
-            {tabs.map(tab => (
-              <div 
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`h-full flex items-center cursor-pointer transition-colors duration-200 ${activeTab === tab ? 'text-primary border-b-2 border-primary pt-[2px]' : 'text-on-surface-variant hover:text-on-surface'}`}
-              >
-                <span className="font-label-md text-label-md uppercase tracking-wider">{tab}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-          </div>
-        </div>
 
-        {/* Editor/Viewer Content */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-deep-base p-4">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-title-md text-title-md font-medium text-white">{activeTab === 'Solutions' && artifactContent ? 'generated_artifact.md' : 'Inspector'}</h2>
-          </div>
-          
-          <div className="flex-1 bg-deep-base border border-border-subtle rounded overflow-y-auto p-4 custom-scrollbar font-code-md text-code-md text-on-surface prose prose-invert max-w-none">
-            {artifactContent ? (
-               <MessageMarkdown content={artifactContent} />
-            ) : (
-               <div className="text-on-surface-variant text-center mt-20 font-body-md">No artifact selected or generated.</div>
-            )}
-          </div>
-        </div>
-      </aside>
     </div>
   );
 }

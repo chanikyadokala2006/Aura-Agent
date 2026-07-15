@@ -39,7 +39,8 @@ _agent_loop_thread.start()
 
 class Api:
     def get_sessions(self):
-        return _global_session_manager.get_sessions()
+        future = asyncio.run_coroutine_threadsafe(_global_session_manager.get_sessions(), _agent_loop)
+        return future.result()
 
     def get_artifact(self, filename):
         artifact_path = os.path.join(project_root, "agent", filename)
@@ -51,13 +52,15 @@ class Api:
     def new_session(self):
         global _global_messages, _global_active_session_id
         _global_messages = []
-        sess = _global_session_manager.create_session()
+        future = asyncio.run_coroutine_threadsafe(_global_session_manager.create_session(), _agent_loop)
+        sess = future.result()
         _global_active_session_id = sess["id"]
         return sess
 
     def load_session(self, session_id):
         global _global_messages, _global_active_session_id
-        sess_meta = _global_session_manager.get_session_metadata(session_id)
+        future = asyncio.run_coroutine_threadsafe(_global_session_manager.get_session_metadata(session_id), _agent_loop)
+        sess_meta = future.result()
         if not sess_meta:
             return None
         _global_active_session_id = session_id
@@ -71,6 +74,24 @@ class Api:
         sess = dict(sess_meta)
         sess["messages"] = [_global_session_manager.serialize_message(m) for m in _global_messages]
         return sess
+        
+    def get_session_cost(self, session_id):
+        try:
+            state = _global_agent.get_state({"configurable": {"thread_id": session_id}})
+            msgs = state.values.get("messages", []) if state and hasattr(state, "values") else []
+        except Exception:
+            msgs = []
+        
+        total_input = 0
+        total_output = 0
+        for m in msgs:
+            serialized = _global_session_manager.serialize_message(m)
+            total_input += serialized.get("input_tokens", 0)
+            total_output += serialized.get("output_tokens", 0)
+        
+        # Approximate cost for Claude 3.5 Sonnet: $3 / 1M input, $15 / 1M output
+        cost = (total_input / 1000000) * 3 + (total_output / 1000000) * 15
+        return {"input_tokens": total_input, "output_tokens": total_output, "cost": cost}
 
     def approve_plan(self):
         try:
@@ -117,12 +138,13 @@ class Api:
         print(f"UI sent message: {text}")
         
         try:
+            from agent.MyAgent import AgentModel
+            
             greetings = ["hi", "hello", "hey", "greetings", "yo", "morning", "afternoon", "evening", "who are you", "what's up", "how are you"]
             lower_input = text.lower().strip()
             is_greeting = any(lower_input.startswith(g) or lower_input == g for g in greetings)
             
             if is_greeting:
-                from agent.MyAgent import AgentModel
                 fast_resp = AgentModel.invoke([
                     SystemMessage(content="You are a friendly AI assistant. Keep it brief and conversational."),
                     HumanMessage(content=text)
@@ -141,9 +163,9 @@ class Api:
             input_messages.append(HumanMessage(content=text))
             
             # Update title if it's the first real message
-            sess_meta = _global_session_manager.get_session_metadata(_global_active_session_id)
+            sess_meta = await _global_session_manager.get_session_metadata(_global_active_session_id)
             if sess_meta and sess_meta["title"] == "New Session":
-                _global_session_manager.update_session_title(_global_active_session_id, text[:30] + "...")
+                await _global_session_manager.update_session_title(_global_active_session_id, text[:30] + "...")
 
             webview.windows[0].evaluate_js("window.startAgentResponse()")
             
@@ -246,7 +268,16 @@ async def _init_agent():
     except Exception as e:
         print(f"Warning: Could not initialize AsyncSqliteSaver: {e}")
         _global_memory = None
+    
+    # Also initialize the session manager db
+    await _global_session_manager.init_db()
+    
     _global_agent = setup_agent(memory=_global_memory)
+    
+    # Initialize and start background scheduler
+    from scheduler import BackgroundScheduler
+    _global_scheduler = BackgroundScheduler(_global_session_manager, _global_agent, _agent_loop)
+    _global_scheduler.start()
 
 
 if __name__ == "__main__":

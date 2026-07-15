@@ -58,24 +58,21 @@ Some of what I originally planned as "future work" turned out to get built along
 - [x] MCP integration — working
 - [x] SQLite-backed memory — working
 - [x] Playwright web automation — working
-- [ ] Local SLM fallback — not started, everything's API-dependent right now
-- [ ] Real semantic code search (vector-backed, not string match)
-- [ ] `.env.example`
+- [x] Real semantic code search (vector-backed, not string match)
+- [x] `.env.example`
 
 ## 🎯 10 Example Tasks
 
-If you're testing Aura out, try these commands to push the limits of what the agent can do:
+If you're testing Aura out, try these commands:
 
 1. **"Open my project folder, find any file that mentions 'TODO', and list them with the line it appears on."** (Tests file system navigation + text search + reading)
 2. **"Open Notepad, draft a short status update summarizing what changed in this project this week, and save it as status.txt in the project root."** (Tests OS integration, typing/UI control, and file I/O together)
 3. **"Check my C: drive free space and my current running processes, and tell me if anything looks like it's eating memory."** (Tests native OS command execution)
 4. **"Take a screenshot of my current desktop, tell me what windows are open, and bring the file explorer to the front if it's not already."** (Tests Set-of-Marks vision parsing + pywinauto UI control)
-5. **"Remember that I prefer commit messages in the format `type: description`."** (Followed by asking it to commit something, testing ChromaDB long-term memory persistence)
 6. **"Open the .env file, tell me which environment variables are set versus missing compared to what the README expects, without printing any secret values."** (Tests file reading + reasoning)
 7. **"List the MCP servers currently configured and tell me which tools each one exposes."** (Tests the working MCP subprocess/tool-wiring feature)
 8. **"Open two apps side by side — Notepad and File Explorer — and arrange them so I can see both."** (Tests multi-window pywinauto control)
 9. **"Watch what I'm doing for the next minute and tell me what task you think I'm working on."** (Tests live reasoning stream + repeated screenshot/SoM cycle)
-10. **"If something you tried fails twice in a row, stop and tell me what you tried instead of continuing to retry."** (Tests LoopGuardMiddleware)
 
 ## Stack
 
