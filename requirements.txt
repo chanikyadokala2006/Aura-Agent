@@ -1,0 +1,15 @@
+langchain
+langchain-openai
+langgraph
+pywebview
+psutil
+pyautogui
+pywinauto
+chromadb
+python-dotenv
+deepagents
+duckduckgo-search
+wikipedia
+pillow
+aiosqlite
+playwright

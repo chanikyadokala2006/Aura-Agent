@@ -3,6 +3,9 @@ import sys
 import json
 import uuid
 import time
+import asyncio
+import aiosqlite
+import threading
 import webview
 
 # Add the project root to sys.path so we can import from agent
@@ -13,116 +16,37 @@ if project_root not in sys.path:
 from agent.MyAgent import setup_agent, retrieve_relevant_memories
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 
-DB_PATH = os.path.join(project_root, "chats.json")
+from db import SessionManager
 
-class SessionManager:
-    def __init__(self):
-        self.sessions = []
-        self.load()
+DB_PATH = os.path.join(project_root, "agent_memory.db")
 
-    def load(self):
-        if os.path.exists(DB_PATH):
-            try:
-                with open(DB_PATH, "r", encoding="utf-8") as f:
-                    self.sessions = json.load(f)
-            except Exception as e:
-                print(f"Failed to load sessions: {e}")
-                self.sessions = []
-        else:
-            self.sessions = []
-
-    def save(self):
-        try:
-            with open(DB_PATH, "w", encoding="utf-8") as f:
-                json.dump(self.sessions, f, indent=2)
-        except Exception as e:
-            print(f"Failed to save sessions: {e}")
-
-    def get_sessions(self):
-        # Return basic info without huge message arrays
-        return [{"id": s["id"], "title": s.get("title", "New Session"), "timestamp": s.get("timestamp", 0)} for s in self.sessions]
-
-    def get_session(self, session_id):
-        for s in self.sessions:
-            if s["id"] == session_id:
-                return s
-        return None
-
-    def create_session(self):
-        s = {
-            "id": str(uuid.uuid4()),
-            "title": "New Session",
-            "timestamp": int(time.time() * 1000),
-            "messages": []
-        }
-        self.sessions.insert(0, s)
-        self.save()
-        return s
-
-    def serialize_message(self, m):
-        base = {"timestamp": int(time.time() * 1000)}
-        if hasattr(m, "additional_kwargs") and "timestamp" in m.additional_kwargs:
-            base["timestamp"] = m.additional_kwargs["timestamp"]
-        else:
-            if not hasattr(m, "additional_kwargs"):
-                m.additional_kwargs = {}
-            if "timestamp" not in m.additional_kwargs:
-                m.additional_kwargs["timestamp"] = base["timestamp"]
-            else:
-                base["timestamp"] = m.additional_kwargs["timestamp"]
-
-        if isinstance(m, HumanMessage):
-            base.update({"role": "user", "content": str(m.content)})
-        elif isinstance(m, SystemMessage):
-            base.update({"role": "system", "content": str(m.content)})
-        elif isinstance(m, AIMessage):
-            base.update({"role": "assistant"})
-            text = ""
-            if isinstance(m.content, list):
-                text_parts = [p.get("text", "") for p in m.content if isinstance(p, dict)]
-                text = "".join(text_parts)
-            else:
-                text = str(m.content)
-            base["content"] = text
-            if hasattr(m, "tool_calls") and m.tool_calls:
-                base["tool_calls"] = m.tool_calls
-        elif isinstance(m, ToolMessage):
-            base.update({
-                "role": "tool",
-                "name": m.name,
-                "tool_call_id": m.tool_call_id,
-                "content": str(m.content)
-            })
-        else:
-            base.update({"role": "unknown", "content": str(m)})
-            
-        return base
-
-    def update_session(self, session_id, langgraph_messages):
-        for s in self.sessions:
-            if s["id"] == session_id:
-                serialized = [self.serialize_message(m) for m in langgraph_messages]
-                
-                # Title generation
-                if len(serialized) > 0 and s["title"] == "New Session":
-                    for msg in serialized:
-                        if msg["role"] == "user":
-                            s["title"] = msg["content"][:30] + "..."
-                            break
-                    
-                s["messages"] = serialized
-                self.save()
-                return s
-        return None
-
-_global_agent = setup_agent()
+_global_agent = None
 _global_messages = []
-_global_session_manager = SessionManager()
+_global_session_manager = SessionManager(DB_PATH)
 _global_active_session_id = None
+_global_memory = None  # AsyncSqliteSaver held open for lifetime of app
+_global_db_conn = None  # Persistent aiosqlite connection
+
+# Single persistent event loop for all agent coroutines
+_agent_loop = asyncio.new_event_loop()
+
+def _start_agent_loop():
+    _agent_loop.run_forever()
+
+_agent_loop_thread = threading.Thread(target=_start_agent_loop, daemon=True)
+_agent_loop_thread.start()
+
 
 class Api:
     def get_sessions(self):
         return _global_session_manager.get_sessions()
+
+    def get_artifact(self, filename):
+        artifact_path = os.path.join(project_root, "agent", filename)
+        if os.path.exists(artifact_path):
+            with open(artifact_path, "r", encoding="utf-8") as f:
+                return f.read()
+        return "Artifact not found."
 
     def new_session(self):
         global _global_messages, _global_active_session_id
@@ -133,28 +57,19 @@ class Api:
 
     def load_session(self, session_id):
         global _global_messages, _global_active_session_id
-        sess = _global_session_manager.get_session(session_id)
-        if not sess:
+        sess_meta = _global_session_manager.get_session_metadata(session_id)
+        if not sess_meta:
             return None
         _global_active_session_id = session_id
         
-        # Reconstruct LangGraph history
-        _global_messages = []
-        for m in sess["messages"]:
-            role = m.get("role")
-            content = m.get("content", "")
-            additional_kwargs = {"timestamp": m.get("timestamp", int(time.time() * 1000))}
+        try:
+            state = _global_agent.get_state({"configurable": {"thread_id": session_id}})
+            _global_messages = state.values.get("messages", []) if state and hasattr(state, "values") else []
+        except Exception:
+            _global_messages = []
             
-            if role == "user":
-                _global_messages.append(HumanMessage(content=content, additional_kwargs=additional_kwargs))
-            elif role == "system":
-                _global_messages.append(SystemMessage(content=content, additional_kwargs=additional_kwargs))
-            elif role == "assistant":
-                tool_calls = m.get("tool_calls", [])
-                _global_messages.append(AIMessage(content=content, tool_calls=tool_calls, additional_kwargs=additional_kwargs))
-            elif role == "tool":
-                _global_messages.append(ToolMessage(content=content, name=m.get("name", ""), tool_call_id=m.get("tool_call_id", ""), additional_kwargs=additional_kwargs))
-        
+        sess = dict(sess_meta)
+        sess["messages"] = [_global_session_manager.serialize_message(m) for m in _global_messages]
         return sess
 
     def approve_plan(self):
@@ -187,10 +102,14 @@ class Api:
         self.send_message(f"Rejected. Please modify the plan based on this feedback: {feedback}")
 
     def send_message(self, text):
+        asyncio.run_coroutine_threadsafe(self._async_send_message(text), _agent_loop)
+
+    async def _async_send_message(self, text):
         global _global_agent, _global_messages, _global_active_session_id, _global_session_manager
         
         if not _global_active_session_id:
-            self.new_session()
+            sess = self.new_session()
+            _global_active_session_id = sess["id"]
             
         if not isinstance(text, str):
             text = str(text)
@@ -209,57 +128,60 @@ class Api:
                     HumanMessage(content=text)
                 ])
                 
-                _global_messages.append(HumanMessage(content=text))
-                _global_messages.append(AIMessage(content=fast_resp.content))
-                _global_session_manager.update_session(_global_active_session_id, _global_messages)
-                
                 escaped_text = json.dumps(fast_resp.content)
                 webview.windows[0].evaluate_js("window.startAgentResponse()")
                 webview.windows[0].evaluate_js(f"window.appendFinalResponse({escaped_text})")
                 return
 
             memories = retrieve_relevant_memories(text)
+            input_messages = []
             if memories:
-                _global_messages.append(SystemMessage(content=memories))
+                input_messages.append(SystemMessage(content=memories))
             
-            _global_messages.append(HumanMessage(content=text))
+            input_messages.append(HumanMessage(content=text))
             
-            # Save the message immediately so user sees it in DB
-            _global_session_manager.update_session(_global_active_session_id, _global_messages)
-            
-            if len(_global_messages) > 30:
-                slice_idx = len(_global_messages) - 30
-                while slice_idx < len(_global_messages):
-                    if isinstance(_global_messages[slice_idx], HumanMessage):
-                        break
-                    slice_idx += 1
-                if slice_idx < len(_global_messages):
-                    _global_messages = _global_messages[slice_idx:]
-                else:
-                    _global_messages = _global_messages[-30:]
+            # Update title if it's the first real message
+            sess_meta = _global_session_manager.get_session_metadata(_global_active_session_id)
+            if sess_meta and sess_meta["title"] == "New Session":
+                _global_session_manager.update_session_title(_global_active_session_id, text[:30] + "...")
 
             webview.windows[0].evaluate_js("window.startAgentResponse()")
             
+            config = {"configurable": {"thread_id": _global_active_session_id}}
             final_state = None
-            for state in _global_agent.stream({"messages": _global_messages}, stream_mode="values"):
+            
+            async for state in _global_agent.astream({"messages": input_messages}, config=config, stream_mode="values"):
                 final_state = state
                 if not state.get("messages"):
                     continue
                     
-                # Save intermediate states to json (captures tool execution)
-                _global_session_manager.update_session(_global_active_session_id, state["messages"])
-                
                 last_msg = state["messages"][-1]
                 
                 if last_msg.type == "ai":
                     if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                         for tc in last_msg.tool_calls:
-                            args_str = ""
-                            if tc.get("args"):
-                                args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in tc["args"].items())
-                                if len(args_str) > 150:
-                                    args_str = args_str[:150] + "..."
-                            msg_text = json.dumps(f"Executing: {tc['name']}({args_str})")
+                            tool_name = tc['name']
+                            human_msg = f"Executing: {tool_name}"
+                            if tool_name in ["list_dir", "list_directory", "list_files"]:
+                                human_msg = f"👀 Looking at the files in the directory..."
+                            elif tool_name in ["view_file", "read_file"]:
+                                human_msg = f"📖 Reading the contents of a file..."
+                            elif tool_name == "search_file":
+                                human_msg = f"🔍 Searching for a file..."
+                            elif tool_name == "computer_move_mouse":
+                                human_msg = f"🖱️ Moving the mouse..."
+                            elif tool_name == "computer_click":
+                                human_msg = f"👆 Clicking on the screen..."
+                            elif tool_name == "computer_type":
+                                human_msg = f"⌨️ Typing text..."
+                            elif tool_name == "run_command":
+                                human_msg = f"🖥️ Running terminal command..."
+                            elif tool_name in ["navigate_to_url", "extract_page_content", "browser_click_element", "browser_type_text"]:
+                                human_msg = f"🌐 Operating Browser ({tool_name})..."
+                            else:
+                                human_msg = f"⚙️ Using tool {tool_name}..."
+
+                            msg_text = json.dumps(human_msg)
                             webview.windows[0].evaluate_js(f"window.appendReasoning({msg_text}, true)")
                     elif last_msg.content and isinstance(last_msg.content, str):
                         if len(last_msg.content.strip()) > 0:
@@ -288,15 +210,11 @@ class Api:
                                 tool_output = tool_output[:200] + "..."
                         else:
                             tool_output = str(tool_output)[:200]
-                        msg_text = json.dumps(f"Tool {last_msg.name} completed. Output: {tool_output}")
+                        msg_text = json.dumps(f"Tool {last_msg.name} completed.")
                         webview.windows[0].evaluate_js(f"window.appendReasoning({msg_text}, false)")
 
             if final_state and final_state.get("messages"):
-                _global_messages = final_state["messages"]
-                _global_session_manager.update_session(_global_active_session_id, _global_messages)
-                
-                last_msg = _global_messages[-1]
-                
+                last_msg = final_state["messages"][-1]
                 final_text = ""
                 if isinstance(last_msg.content, list):
                     text_parts = [part["text"] for part in last_msg.content if isinstance(part, dict) and "text" in part]
@@ -310,12 +228,32 @@ class Api:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            print(f"Error in send_message: {e}")
             error_msg = json.dumps(f"Error: {str(e)}")
             webview.windows[0].evaluate_js(f"window.appendFinalResponse({error_msg})")
 
 
+async def _init_agent():
+    """Initialize the agent with AsyncSqliteSaver checkpointer."""
+    global _global_agent, _global_memory, _global_db_conn
+    try:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        # Open a persistent connection that lives for the entire app lifetime.
+        # Using from_conn_string creates a context whose internal thread can
+        # only be started once, causing RuntimeError on the second message.
+        _global_db_conn = await aiosqlite.connect(DB_PATH)
+        _global_memory = AsyncSqliteSaver(_global_db_conn)
+        print("AsyncSqliteSaver checkpointer initialized.")
+    except Exception as e:
+        print(f"Warning: Could not initialize AsyncSqliteSaver: {e}")
+        _global_memory = None
+    _global_agent = setup_agent(memory=_global_memory)
+
+
 if __name__ == "__main__":
+    # Initialize agent with async checkpointer on the persistent loop, wait for it
+    future = asyncio.run_coroutine_threadsafe(_init_agent(), _agent_loop)
+    future.result()  # Block until agent is fully initialized
+
     html_path = os.path.join(project_root, "index.html")
     api = Api()
     

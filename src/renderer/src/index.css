@@ -1,87 +1,109 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 
-@layer base {
-  body {
-    background-color: #0d0d12;
-    color: #e2e8f0;
+@theme {
+  --color-outline-variant: #434655;
+  --color-tertiary-fixed: #e4e2e1;
+  --color-tertiary-container: #6e6d6d;
+  --color-on-primary-fixed-variant: #003ea8;
+  --color-surface-dim: #11131b;
+  --color-surface-container-high: #282a32;
+  --color-primary: #b4c5ff;
+  --color-on-primary-container: #eeefff;
+  --color-on-primary-fixed: #00174b;
+  --color-on-secondary-fixed-variant: #474646;
+  --color-surface-container: #1d1f27;
+  --color-secondary-fixed: #e5e2e1;
+  --color-on-error-container: #ffdad6;
+  --color-on-secondary: #313030;
+  --color-on-tertiary-fixed-variant: #474746;
+  --color-error: #ffb4ab;
+  --color-secondary: #c8c6c5;
+  --color-inverse-surface: #e1e2ed;
+  --color-surface-tint: #b4c5ff;
+  --color-primary-container: #2563eb;
+  --color-on-background: #e1e2ed;
+  --color-on-secondary-container: #bab8b7;
+  --color-on-secondary-fixed: #1c1b1b;
+  --color-on-error: #690005;
+  --color-secondary-container: #4a4949;
+  --color-on-tertiary-fixed: #1b1c1c;
+  --color-surface-container-low: #191b23;
+  --color-on-tertiary-container: #f3f0ef;
+  --color-secondary-fixed-dim: #c8c6c5;
+  --color-tertiary: #c8c6c5;
+  --color-primary-fixed-dim: #b4c5ff;
+  --color-on-surface: #e1e2ed;
+  --color-inverse-on-surface: #2e3039;
+  --color-error-container: #93000a;
+  --color-surface-bright: #373942;
+  --color-tertiary-fixed-dim: #c8c6c5;
+  --color-on-primary: #002a78;
+  --color-surface: #11131b;
+  --color-on-tertiary: #303030;
+  --color-surface-container-lowest: #0c0e16;
+  --color-surface-variant: #32343d;
+  --color-primary-fixed: #dbe1ff;
+  --color-surface-container-highest: #32343d;
+  --color-on-surface-variant: #c3c6d7;
+  --color-outline: #8d90a0;
+  --color-inverse-primary: #0053db;
+  --color-background: #11131b;
+  --color-deep-base: #0A0A0A;
+  --color-surface-elevated: #131313;
+  --color-surface-overlay: #1E1E1E;
+  --color-border-subtle: #2A2A2A;
+
+  --font-body-sm: "Inter", sans-serif;
+  --font-title-md: "Inter", sans-serif;
+  --font-headline-sm: "Inter", sans-serif;
+  --font-body-md: "Inter", sans-serif;
+  --font-display-sm: "Inter", sans-serif;
+  --font-code-md: "JetBrains Mono", monospace;
+  --font-label-md: "Inter", sans-serif;
+}
+
+body {
+    background-color: #0A0A0A;
+    color: #e1e2ed;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: 100vh;
+    width: 100vw;
     font-family: 'Inter', sans-serif;
-  }
 }
 
-/* Futuristic/Agentic styling enhancements */
-.cyber-panel {
-  background: rgba(22, 22, 31, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+.pane {
+    background-color: #131313;
+    border-right: 1px solid #2A2A2A;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
-.cyber-panel-glow {
-  border-color: rgba(6, 182, 212, 0.3);
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.15);
+.pane:last-child {
+    border-right: none;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar for sleek look */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+    width: 6px;
+    height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: rgba(13, 13, 18, 0.5);
+    background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+    background: #2A2A2A;
+    border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(6, 182, 212, 0.5);
+    background: #434655;
 }
 
-/* Terminal Font */
-.font-mono-custom {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-/* Pulsing terminal dot */
-@keyframes blink {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
-}
-
-.cursor-blink {
-  animation: blink 1s infinite;
-}
-
-@keyframes pulse-cyan {
-  0%, 100% {
-    box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
-  }
-}
-
-.glow-pulse {
-  animation: pulse-cyan 3s infinite;
-}
-
-@keyframes indeterminate-progress {
-  0% {
-    transform: translateX(-100%) scaleX(0.2);
-  }
-  50% {
-    transform: translateX(0%) scaleX(0.5);
-  }
-  100% {
-    transform: translateX(100%) scaleX(0.2);
-  }
-}
-
-.animate-progress {
-  animation: indeterminate-progress 1.5s infinite ease-in-out;
-  transform-origin: left center;
-}
+.syntax-string { color: #A5D6FF; }
+.syntax-keyword { color: #FF7B72; }
+.syntax-function { color: #D2A8FF; }
+.syntax-comment { color: #8B949E; }
+.syntax-number { color: #79C0FF; }

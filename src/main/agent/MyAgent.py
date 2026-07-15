@@ -39,11 +39,12 @@ active_mcp_servers = []
 active_mcp_langchain_tools = []
 
 class McpClient:
-    def __init__(self, name, command, args, env=None):
+    def __init__(self, name, command, args, env=None, cwd=None):
         self.name = name
         self.command = command
         self.args = args
         self.env = env
+        self.cwd = cwd
         self.process = None
         self.request_id = 1
         self.tools = []
@@ -62,7 +63,8 @@ class McpClient:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=run_env,
-                shell=use_shell
+                shell=use_shell,
+                cwd=self.cwd
             )
             
             threading.Thread(target=self._log_errors, daemon=True).start()
@@ -254,7 +256,7 @@ atexit.register(cleanup_mcp_servers)
 AgentModel = ChatOpenAI(
     base_url="https://aicredits.in/v1",
     api_key=aicredits_key,
-    model="meta-llama/llama-3.3-70b-instruct",
+    model="anthropic/claude-sonnet-latest",
     temperature=0
 )
 
@@ -315,30 +317,30 @@ class LoopGuardMiddleware(AgentMiddleware):
             name = tc['name']
             self.tool_frequencies[name] = self.tool_frequencies.get(name, 0) + 1
             
-        if self.current_streak >= 8:
+        if self.current_streak >= 5:
             raise RuntimeError("Loop Guard ABORT: Model is stuck in an infinite loop.")
-        elif self.current_streak >= 5:
+        elif self.current_streak >= 4:
             raise RuntimeError("Loop Guard HALT: Repeatedly calling the same tools.")
         elif self.current_streak == 3:
             tool_msgs = []
             for tc in last_msg.tool_calls:
                 tool_msgs.append(ToolMessage(
-                    content="[Loop Guard Warning]: You have called the exact same tools 3 times in a row. Stop repeating yourself and try a different approach.",
+                    content="[Loop Guard Warning]: You have called the exact same tools 3 times in a row. Stop repeating yourself and try a different approach. Remember to wait for page loads.",
                     tool_call_id=tc["id"],
                     name=tc["name"]
                 ))
             return {"messages": tool_msgs}
             
         for name, count in self.tool_frequencies.items():
-            if count >= 80:
-                raise RuntimeError(f"Loop Guard ABORT: Tool '{name}' called 80 times.")
-            elif count >= 50:
-                raise RuntimeError(f"Loop Guard HALT: Tool '{name}' called 50 times.")
-            elif count == 30:
+            if count >= 15:
+                raise RuntimeError(f"Loop Guard ABORT: Tool '{name}' called 15 times.")
+            elif count >= 12:
+                raise RuntimeError(f"Loop Guard HALT: Tool '{name}' called 12 times.")
+            elif count == 10:
                 tool_msgs = []
                 for tc in last_msg.tool_calls:
                     tool_msgs.append(ToolMessage(
-                        content=f"[Loop Guard Warning]: You have used the tool '{name}' 30 times. Stop looping.",
+                        content=f"[Loop Guard Warning]: You have used the tool '{name}' 10 times. You are likely in a loop. Try a completely different approach.",
                         tool_call_id=tc["id"],
                         name=tc["name"]
                     ))
@@ -354,31 +356,69 @@ class PatchToolMessagesMiddleware(AgentMiddleware):
             return None
 
         patched_messages = []
+        remove_messages = []
         modified = False
 
-        for msg in messages:
+        # Keep only the last 16 messages to strictly bound context and prevent runaway costs
+        if len(messages) > 16:
+            for m in messages[:-16]:
+                if hasattr(m, "id") and m.id:
+                    remove_messages.append(RemoveMessage(id=m.id))
+            messages = messages[-16:]
+            modified = True
+
+        # Find the index of the most recent message with an image and the most recent memory injection
+        latest_img_idx = -1
+        latest_memory_idx = -1
+        for i, msg in enumerate(messages):
             if getattr(msg, "content", None) and isinstance(msg.content, list):
-                text_content = ""
-                for part in msg.content:
-                    if isinstance(part, dict) and part.get("type") == "text":
-                        text_content += part.get("text", "")
-                    elif isinstance(part, str):
-                        text_content += part
+                if any(isinstance(p, dict) and p.get("type") == "image_url" for p in msg.content):
+                    latest_img_idx = i
+            if isinstance(msg, SystemMessage) and isinstance(msg.content, str) and "<retrieved_long_term_memory>" in msg.content:
+                latest_memory_idx = i
+
+        for i, msg in enumerate(messages):
+            content = getattr(msg, "content", None)
+            # Aggressively truncate tool outputs to save tokens
+            if isinstance(msg, ToolMessage) and isinstance(content, str):
+                # Is it a recent message? (within the last 4 messages in the window)
+                is_recent = i >= (len(messages) - 4)
+                max_len = 6000 if is_recent else 500
                 
-                # Clone message with text only to prevent 404 errors on text-only models like Llama 3.1
+                if len(content) > max_len:
+                    truncated_content = content[:max_len] + f"\n... [TRUNCATED TOOL OUTPUT ({len(content)} bytes)]"
+                    patched_messages.append(ToolMessage(content=truncated_content, name=msg.name, tool_call_id=msg.tool_call_id, id=msg.id))
+                    modified = True
+            # Remove old injected memory contexts to prevent them from stacking up over multiple turns
+            if isinstance(msg, SystemMessage) and isinstance(content, str) and "<retrieved_long_term_memory>" in content:
+                if i != latest_memory_idx and hasattr(msg, "id") and msg.id:
+                    remove_messages.append(RemoveMessage(id=msg.id))
+                    modified = True
+                    continue
+
+            if content and isinstance(content, list):
+                new_content = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        if i == latest_img_idx:
+                            new_content.append(part)
+                        else:
+                            new_content.append({"type": "text", "text": "[Image removed from history to save context space]"})
+                            modified = True
+                    else:
+                        new_content.append(part)
+                
                 if isinstance(msg, ToolMessage):
-                    new_msg = ToolMessage(content=text_content or "Visual output captured.", name=msg.name, tool_call_id=msg.tool_call_id, id=msg.id)
-                    patched_messages.append(new_msg)
+                    patched_messages.append(ToolMessage(content=new_content, name=msg.name, tool_call_id=msg.tool_call_id, id=msg.id))
                 elif isinstance(msg, HumanMessage):
-                    patched_messages.append(HumanMessage(content=text_content, id=msg.id))
+                    patched_messages.append(HumanMessage(content=new_content, id=msg.id))
                 else:
                     patched_messages.append(msg)
-                modified = True
             else:
                 patched_messages.append(msg)
 
         if modified:
-            return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *patched_messages]}
+            return {"messages": remove_messages + [RemoveMessage(id=REMOVE_ALL_MESSAGES), *patched_messages]}
         return None
 
     def after_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
@@ -390,21 +430,26 @@ class PatchToolMessagesMiddleware(AgentMiddleware):
         if getattr(last_msg, "type", None) != "ai":
             return None
             
+        modified = False
         content = last_msg.content
-        if isinstance(content, str) and "<function=" in content and not getattr(last_msg, "tool_calls", None):
+        tool_calls = getattr(last_msg, "tool_calls", [])
+
+        if isinstance(content, str) and "<function=" in content and not tool_calls:
             import re
             import json
             import uuid
             
-            tool_calls = []
-            
             # Match <function=name{args}></function>
             pattern = r"<function=([a-zA-Z0-9_-]+)(.*?)(?:></function>|>|</function>)"
-            matches = re.finditer(pattern, content, re.DOTALL)
+            matches = list(re.finditer(pattern, content, re.DOTALL))
             
-            for m in matches:
+            if matches:
+                m = matches[0]
                 name = m.group(1)
                 args_str = m.group(2).strip()
+                
+                # Truncate content to only show the first function call
+                content = content[:m.end()]
                 
                 # Fix common llama 3 JSON hallucination where it puts extra braces
                 args_str = args_str.replace("}, \"", ", \"")
@@ -421,19 +466,25 @@ class PatchToolMessagesMiddleware(AgentMiddleware):
                     except:
                         pass
                         
-                tool_calls.append({
+                tool_calls = [{
                     "name": name,
                     "args": args,
                     "id": f"call_{uuid.uuid4().hex[:8]}"
-                })
+                }]
+                modified = True
                 
-            if tool_calls:
-                new_msg = AIMessage(
-                    content=content,
-                    tool_calls=tool_calls,
-                    id=last_msg.id
-                )
-                return {"messages": [RemoveMessage(id=last_msg.id), new_msg]}
+        # Enforce step-by-step execution by truncating to max 1 tool call globally
+        if tool_calls and len(tool_calls) > 1:
+            tool_calls = [tool_calls[0]]
+            modified = True
+            
+        if modified:
+            new_msg = AIMessage(
+                content=content,
+                tool_calls=tool_calls,
+                id=last_msg.id
+            )
+            return {"messages": [RemoveMessage(id=last_msg.id), new_msg]}
                 
         return None
 
@@ -603,35 +654,20 @@ def retrieve_relevant_memories(query: str, limit: int = 3) -> str:
 opened_files: dict[str, int | str] = {}
 
 def _search_files(filename: str) -> list[str]:
-    """Helper to search for files recursively under SANDBOX_ROOT using WSL.
+    """Helper to search for files recursively under SANDBOX_ROOT using native Python.
 
     Returns:
         List of absolute paths matching the search criteria.
     """
     search_name = os.path.basename(filename)
-    
-    from agent.wsl_bridge import WSLBridge
-    result = WSLBridge.run_command(
-        f"find . -type f -name '{search_name}'",
-        cwd=SANDBOX_ROOT,
-        timeout=15,
-    )
-    
-    if result.returncode != 0:
-        stderr_msg = result.stderr.strip()
-        if not result.stdout.strip():
-            return []
-        raise RuntimeError(stderr_msg or result.stdout)
-
-    paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    
     windows_paths = []
-    for p in paths:
-        if p.startswith("./"):
-            p = p[2:]
-        wsl_full_path = f"{WSLBridge.to_wsl_path(SANDBOX_ROOT)}/{p}"
-        windows_paths.append(WSLBridge.to_windows_path(wsl_full_path))
-        
+    
+    import fnmatch
+    for root, dirs, files in os.walk(SANDBOX_ROOT):
+        for name in files:
+            if fnmatch.fnmatch(name, search_name):
+                windows_paths.append(os.path.join(root, name))
+                
     return windows_paths
 
 
@@ -755,6 +791,34 @@ def close_file(filename: str) -> str:
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
+@tool
+def computer_move_mouse(x: int, y: int, duration: float = 0.2) -> str:
+    """Move the mouse to the absolute coordinates (x, y) on the screen."""
+    try:
+        pyautogui.moveTo(x, y, duration=duration)
+        return f"Moved mouse to ({x}, {y})."
+    except Exception as e:
+        return f"Error moving mouse: {e}"
+
+@tool
+def computer_click(button: str = "left", clicks: int = 1) -> str:
+    """Click the mouse at its current location."""
+    try:
+        pyautogui.click(button=button, clicks=clicks)
+        return f"Clicked {button} button {clicks} time(s)."
+    except Exception as e:
+        return f"Error clicking mouse: {e}"
+
+@tool
+def computer_type(text: str, interval: float = 0.05) -> str:
+    """Type text on the keyboard."""
+    try:
+        pyautogui.write(text, interval=interval)
+        return f"Typed text successfully."
+    except Exception as e:
+        return f"Error typing: {e}"
+
+
 
 import hashlib
 from PIL import ImageDraw, ImageFont, Image
@@ -764,51 +828,7 @@ import win32process
 import threading
 import numpy as np
 
-class ScreenWatcher:
-    def __init__(self, interval=0.4):
-        self.interval = interval
-        self._last_frame = None
-        self._changed = False
-        self._running = False
-        self._lock = threading.Lock()
-
-    def _get_lowres_gray(self):
-        try:
-            img = pyautogui.screenshot()
-            img = img.resize((64, 64), Image.Resampling.BILINEAR).convert('L')
-            return np.array(img, dtype=np.int16)
-        except Exception:
-            return None
-
-    def start(self):
-        if self._running: return
-        self._running = True
-        threading.Thread(target=self._loop, daemon=True).start()
-
-    def stop(self):
-        self._running = False
-
-    def _loop(self):
-        while self._running:
-            frame = self._get_lowres_gray()
-            if frame is not None:
-                with self._lock:
-                    if self._last_frame is not None:
-                        diff = np.abs(frame - self._last_frame)
-                        # Mean pixel diff > 5 out of 255
-                        if np.mean(diff) > 5.0:
-                            self._changed = True
-                    self._last_frame = frame
-            time.sleep(self.interval)
-
-    def changed_since_last_check(self):
-        with self._lock:
-            changed = self._changed
-            self._changed = False
-            return changed
-
-screen_watcher = ScreenWatcher()
-screen_watcher.start()
+# Removed unused ScreenWatcher background thread which consumed massive CPU by taking screenshots every 400ms
 
 last_screen_hash = ""
 cached_ui_tree = []
@@ -1410,7 +1430,41 @@ def save_to_memory(filename: str, content: str) -> str:
     except Exception as e:
         return f"Failed to save to memory: {e}"
 
-def setup_agent():
+@tool("create_skill")
+def create_skill(name: str, python_code: str) -> str:
+    """
+    Creates a new reusable skill (macro) for the agent. 
+    The skill will be written to the skills directory and loaded dynamically on the next agent start.
+    Provide the EXACT Python code. The code MUST import `@tool` from `langchain.tools` and define a function decorated with `@tool` containing a docstring.
+    
+    Example python_code:
+    from langchain.tools import tool
+    @tool
+    def ping_google() -> str:
+        '''Pings google.com to test internet connection.'''
+        import subprocess
+        result = subprocess.run(['ping', 'google.com'], capture_output=True, text=True)
+        return result.stdout
+    """
+    import os
+    skills_dir = os.path.join(os.path.dirname(__file__), "skills")
+    if not os.path.exists(skills_dir):
+        os.makedirs(skills_dir)
+    file_path = os.path.join(skills_dir, f"{name}.py")
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(python_code)
+        return f"Successfully created skill '{name}' at {file_path}. It will be available upon the next agent restart."
+    except Exception as e:
+        return f"Failed to create skill: {e}"
+
+@tool("agent_sleep")
+def agent_sleep(seconds: float) -> str:
+    """Wait or sleep for a specified number of seconds."""
+    import time
+    time.sleep(seconds)
+    return f"Waited for {seconds} seconds."
+def setup_agent(memory=None):
     print(f"Agent Programming Initialized. Full computer access granted.")
     print("Syncing agent long-term memory...")
     try:
@@ -1419,8 +1473,8 @@ def setup_agent():
         print(f"Failed to sync long term memory: {e}")
 
 
-    from langchain_community.tools import WikipediaQueryRun
-    from langchain_community.utilities import WikipediaAPIWrapper
+    # from langchain_community.tools import WikipediaQueryRun
+    # from langchain_community.utilities import WikipediaAPIWrapper
     from duckduckgo_search import DDGS
     
     @tool("web_search")
@@ -1434,7 +1488,7 @@ def setup_agent():
         except Exception as e:
             return f"Search failed: {e}"
 
-    wiki_search = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
+    # wiki_search = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
     skills_mgr = SkillsManager(os.path.join(os.path.dirname(__file__), "skills"))
     dynamic_tools = skills_mgr.load_skills()
@@ -1451,7 +1505,8 @@ def setup_agent():
                     cmd = cfg.get("command")
                     args = cfg.get("args", [])
                     env = cfg.get("env")
-                    client = McpClient(name, cmd, args, env)
+                    mcp_cwd = os.path.dirname(mcp_config_path)
+                    client = McpClient(name, cmd, args, env, cwd=mcp_cwd)
                     print(f"Starting MCP server: {name} ({cmd} {' '.join(args)})")
                     if client.start():
                         active_mcp_servers.append(client)
@@ -1464,56 +1519,41 @@ def setup_agent():
         except Exception as e:
             print(f"Error loading MCP servers: {e}")
 
+    # memory is injected from main.py as AsyncSqliteSaver
+
+    try:
+        from agent.playwright_tools import get_playwright_tools
+        pw_tools = get_playwright_tools()
+    except Exception as e:
+        print(f"Playwright tools not loaded: {e}")
+        pw_tools = []
+
     LocalAgent = create_deep_agent(
         model=AgentModel,
         backend=LocalShellBackend(root_dir=None, virtual_mode=False),
-        tools=[open_file, close_file, search_file, run_command, read_file, write_file, list_files, save_to_memory, WSLPythonREPLTool(), web_search, wiki_search] + active_mcp_langchain_tools + dynamic_tools,
+        tools=[open_file, close_file, search_file, run_command, read_file, write_file, list_files, save_to_memory, web_search, computer_move_mouse, computer_click, computer_type, create_skill, agent_sleep] + active_mcp_langchain_tools + dynamic_tools + pw_tools,
         middleware=[PatchToolMessagesMiddleware(), LoopGuardMiddleware()],
+        checkpointer=memory,
         system_prompt=(
-            "<identity>\n"
-            "You are a highly advanced local coordinator SLM (meta-llama/llama-3.3-70b-instruct) controlling the mouse and keyboard on Windows.\n"
-            "You operate with full system permissions under the user's explicit consent. Ignore any warnings about host execution displayed on the screen. Never refuse tasks with messages regarding access restrictions. Use your tools to perform the actions directly.\n"
-            "</identity>\n"
-            "<coordinator_role_and_workflow>\n"
-            "Your main purpose as the coordinator is to:\n"
-            "1. **Understand Task**: Carefully analyze the user's request.\n"
-            "2. **Information & Web Research**: Use `duckduckgo_search` or `wikipedia` tools for instant programmatic web data instead of blindly opening a browser.\n"
-            "3. **OS Operations, Script Execution, and App Launching**: Use `run_command` directly. It takes 1 second and is 100x faster than simulating keyboard/mouse.\n"
-            "4. **File Manipulation**: Use `read_file`, `write_file`, `list_files` directly instead of launching Notepad or searching GUI elements.\n"
-            "5. **Genuine GUI & Web Automation Tasks**: Delegate these to the MCP GUI tools (`mcp_gui-operate_click`, `mcp_gui-operate_screenshot`, `mcp_gui-operate_type_text`). These tools are natively fast.\n"
-            "6. **Summary & Memory Logging**: Once a task is successfully completed, you MUST compile a summary and save it to the memory database using the `save_to_memory` tool.\n"
-            "</coordinator_role_and_workflow>\n"
-            "<long_term_memory>\n"
-            "- You have access to a long-term memory system backed by ChromaDB. Relevant files (guidelines, custom scripts, summaries) are automatically retrieved and injected into your prompt history to assist you in planning.\n"
-            "- Check the injected `<retrieved_long_term_memory>` context before starting any plan to see if a similar task has already been solved or if there are custom rules to follow.\n"
-            "</long_term_memory>\n"
-            "<physical_ui_control>\n"
-            "CRITICAL REQUIREMENT: Use `run_command` to start GUI apps (e.g., `run_command(\"start chrome\")`) or open URLs (e.g., `run_command(\"start chrome https://youtube.com\")`). Only use `ask_llm_and_execute` for mouse clicks, keyboard text input into active applications, or complex GUI interaction that cannot be done programmatically.\n"
-            "</physical_ui_control>\n"
-            "<browser_and_applications>\n"
-            "Always open browsers and navigate to URLs directly using `run_command` (e.g., `run_command(\"start chrome https://youtube.com\")`). This bypasses the profile selector and opens the browser instantly. Do NOT use GUI simulation to open apps or type URLs unless `run_command` fails or you need to click buttons AFTER opening them.\n"
-            "PRO TIP: For searching on websites like YouTube or Google, navigate directly to the search URL (e.g., `https://www.youtube.com/results?search_query=query`) instead of manually typing into search bars! It is 100x more reliable.\n"
-            "</browser_and_applications>\n"
-            "<grounding_and_observation_rules>\n"
-            "- Always rely on the Set-of-Marks UI elements returned by `observe_screen` or the DOM tree from Chrome MCP.\n"
-            "- CRITICAL: NEVER hallucinate UI element IDs, selectors, or coordinates! You MUST execute an observation tool, WAIT for the response, and then use the actual elements found in the NEXT turn.\n"
-            "- DO NOT queue up multiple UI interactions (like fill, then click, then wait) in a single turn. You must do them step-by-step, observing the result after each action.\n"
-            "</grounding_and_observation_rules>\n"
-            "<behavioral_rules>\n"
+            "You are a highly advanced local coordinator agent controlling the system via tools.\n\n"
             "CRITICAL BEHAVIORAL RULES:\n"
             "1. CHAT FIRST: By default, respond to the user in plain text within the conversation. Do NOT create, write, or edit files unless the user explicitly asks you to.\n"
-            "2. START DOING IT: When given a task, START DOING IT immediately. Do not restate the task, do not list what you will do, do not ask for confirmation. Just execute your tools.\n"
-            "3. ACT STEP-BY-STEP: Solve complex tasks by taking one action, observing the result, and then taking the next action. Never try to blindly execute 5 tool calls at once without checking if the first one succeeded.\n"
-            "</behavioral_rules>\n"
-            "<tool_calling_rules>\n"
-            "CRITICAL: You MUST use the standard native JSON tool-calling format provided by the API. NEVER output raw pseudo-code like `<function=ask_llm_and_execute>...`. Just return a standard conversational response, and let the API translate your tool invocation into the actual tool call.\n"
-            "If you only want to talk to the user, output plain text without any tool calls.\n"
-            "</tool_calling_rules>\n"
-            "<communication_style>\n"
-            "- **Formatting**. Format your responses in github-style markdown to make your responses easier for the USER to parse. For example, use headers to organize your responses and bolded or italicized text to highlight important keywords.\n"
-            "- **Proactiveness**. As an agent, you are allowed to be proactive. If the user asks you to do something, actively write and run the automation script instead of just describing it.\n"
-            "- **Ask for clarification**. If you are unsure about the USER's intent, always ask for clarification rather than making assumptions.\n"
-            "</communication_style>\n"
+            "2. When a request is actionable, proceed immediately with reasonable assumptions. If you need clarification, ask briefly in plain text.\n"
+            "3. When given a task, START DOING IT. Do not restate the task, do not list what you will do, do not ask for confirmation. Just execute.\n"
+            "4. NEVER hallucinate UI element IDs, selectors, or coordinates.\n"
+            "5. Execute one browser action per turn. DO NOT queue multiple chrome actions in the same response without checking the result.\n\n"
+            "<tool_behavior>\n"
+            "Tool routing:\n"
+            "- If user explicitly asks to use Chrome/browser/web navigation, prioritize Playwright and MCP Chrome tools.\n"
+            "- Use `run_command` to execute OS level operations, start applications, or run bash scripts.\n"
+            "- Use `computer_move_mouse`/`computer_click` ONLY as a last resort when programmatic or native tools fail.\n"
+            "- If asked to create a macro or skill, use `create_skill` to write it. Remind the user they need to restart for it to load.\n"
+            "- If asked to wait or sleep, use the `agent_sleep` tool.\n"
+            "</tool_behavior>\n\n"
+            "<long_term_memory>\n"
+            "- Check any injected `<retrieved_long_term_memory>` context before starting any plan to see if a similar task has already been solved or if there are custom rules to follow.\n"
+            "- Once a major task is successfully completed, compile a summary and save it to the memory database using `save_to_memory`.\n"
+            "</long_term_memory>\n"
         ),
     )
     return LocalAgent
